@@ -31,6 +31,7 @@ struct superblock sb;
 void
 readsb(int dev, struct superblock *sb)
 {
+  log_info("dev:%d (must ==1 ROOTDEV) sb:%p", dev, sb);
   struct buf *bp;
 
   bp = bread(dev, 1);
@@ -171,6 +172,7 @@ struct {
 void
 iinit(int dev)
 {
+  log_info("dev:%d (must ==1 ROOTDEV)", dev);
   int i = 0;
   
   initlock(&icache.lock, "icache");
@@ -241,6 +243,7 @@ iupdate(struct inode *ip)
 static struct inode*
 iget(uint dev, uint inum)
 {
+  log_debug("dev:%u inum:%u", dev, inum);
   struct inode *ip, *empty;
 
   acquire(&icache.lock);
@@ -282,6 +285,7 @@ idup(struct inode *ip)
   return ip;
 }
 
+// TODO
 // Lock the given inode.
 // Reads the inode from disk if necessary.
 void
@@ -592,6 +596,9 @@ dirlink(struct inode *dp, char *name, uint inum)
 //   skipelem("a", name) = "", setting name = "a"
 //   skipelem("", name) = skipelem("////", name) = 0
 //
+//   skipelem("/init", name) = skipelem("init", name)
+//                  ^ returns here ("")
+//                  setting name = "init" [len:4]
 static char*
 skipelem(char *path, char *name)
 {
@@ -624,6 +631,7 @@ skipelem(char *path, char *name)
 static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
+  log_debug("path:%s nameiparent:%d name:%s", path, nameiparent, name);
   struct inode *ip, *next;
 
   if(*path == '/')
@@ -631,6 +639,10 @@ namex(char *path, int nameiparent, char *name)
   else
     ip = idup(myproc()->cwd);
 
+  // TODO
+  // exec("/init") -> namei("/init") -> namex("/init", 0, name)
+  //   -> skipelem("/init", name)
+  //                     ^ returns "", name = "init"
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
     if(ip->type != T_DIR){
@@ -659,6 +671,7 @@ namex(char *path, int nameiparent, char *name)
 struct inode*
 namei(char *path)
 {
+  log_debug("path:%s", path);
   char name[DIRSIZ];
   return namex(path, 0, name);
 }

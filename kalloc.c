@@ -32,6 +32,8 @@ void
 kinit1(void *vstart, void *vend)
 {
   initlock(&kmem.lock, "kmem");
+  // needed?
+  // if needed, why not kmem->freelist = NULL ?
   kmem.use_lock = 0;
   freerange(vstart, vend);
 }
@@ -50,6 +52,7 @@ freerange(void *vstart, void *vend)
   p = (char*)PGROUNDUP((uint)vstart);
   for(; p + PGSIZE <= (char*)vend; p += PGSIZE)
     kfree(p);
+  breakpoint();
 }
 //PAGEBREAK: 21
 // Free the page of physical memory pointed at by v,
@@ -62,6 +65,7 @@ kfree(char *v)
   struct run *r;
 
   if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+    // main() -> kinit1() -> kfreerange() -> won't print anything
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
@@ -79,10 +83,39 @@ kfree(char *v)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
+/**
+ * @see main
+ */
 char*
 kalloc(void)
 {
   struct run *r;
+
+  volatile int debug = 0;
+  if (debug != 0) {
+    volatile int breakpoint = 0;
+    if ((uint)kmem.freelist != 0x803ff000)
+      breakpoint |= 0x1;
+    if ((uint)kmem.freelist->next != 0x803fe000)
+      breakpoint |= 0x2;
+    volatile struct run *tmpr;
+    tmpr = kmem.freelist; // 0x803ff000
+    while (1) {
+      tmpr = tmpr->next;  // 0x803fe000 0x803fd000 ... 0x80117000 0x80116000 0
+      if ((uint)tmpr == 0x80117000)
+        breakpoint |= 0x04;
+      if ((uint)tmpr == 0x80116000)
+        breakpoint |= 0x08;
+      if (tmpr == 0) {
+        breakpoint |= 0x10;
+        break;
+      }
+    }
+    breakpoint |= 0x100;
+    (void)breakpoint;
+  }
+  volatile struct run *kmem_freelist_prev = kmem.freelist;
+  (void)kmem_freelist_prev;
 
   if(kmem.use_lock)
     acquire(&kmem.lock);

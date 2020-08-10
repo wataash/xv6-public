@@ -17,6 +17,8 @@ swtch:
   pushl %esi
   pushl %edi
 
+  // スタックをぶっこわしてretで実行先 (常にforkret()?) に飛ぶ
+
   # Switch stacks
   movl %esp, (%eax)
   movl %edx, %esp

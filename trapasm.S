@@ -1,5 +1,7 @@
 #include "mmu.h"
 
+// TODO: memdump
+
   # vectors.S sends all traps here.
 .globl alltraps
 alltraps:

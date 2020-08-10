@@ -73,9 +73,13 @@ lgdt(struct segdesc *p, int size)
 
 struct gatedesc;
 
+#define log_debug_(fmt, ...) cprintf("%0\x1b[37m %s " fmt "\x1b[0m\n", __func__, ##__VA_ARGS__)
+void cprintf(char*, ...);
+
 static inline void
 lidt(struct gatedesc *p, int size)
 {
+  log_debug_("");
   volatile ushort pd[3];
 
   pd[0] = size-1;
@@ -138,6 +142,15 @@ rcr2(void)
   return val;
 }
 
+// (gdb) disas
+// Dump of assembler code for function lcr3:
+//    0x80107746 <+0>:	push   %ebp
+//    0x80107747 <+1>:	mov    %esp,%ebp
+// => 0x80107749 <+3>:	mov    0x8(%ebp),%eax
+//    0x8010774c <+6>:	mov    %eax,%cr3
+//    0x8010774f <+9>:	nop
+//    0x80107750 <+10>:	pop    %ebp
+//    0x80107751 <+11>:	ret
 static inline void
 lcr3(uint val)
 {

@@ -50,6 +50,36 @@ printint(int xx, int base, int sign)
 }
 //PAGEBREAK: 50
 
+static const char *
+cpuid_s(void) {
+  switch (cpuid()) {
+  case 0:
+    return "\x1b[32m0\x1b[0m";
+  case 1:
+    return "\x1b[34m1\x1b[0m";
+  default:
+    return "?";
+  }
+}
+
+static int
+strcmp_(const char *a, const char *b)
+{
+  for (; *a != '\0' || *b != '\0'; a++, b++) {
+    if (*a != *b)
+      return (*a - *b);
+  }
+  return 0;
+}
+
+static void
+strcpy_(char *dest, const char *src)
+{
+  for (; *src != '\0'; dest++, src++)
+    *dest = *src;
+  *dest = '\0';
+}
+
 // Print to the console. only understands %d, %x, %p, %s.
 void
 cprintf(char *fmt, ...)
@@ -61,6 +91,31 @@ cprintf(char *fmt, ...)
   locking = cons.locking;
   if(locking)
     acquire(&cons.lock);
+
+  (void)strcmp_;
+  (void)strcpy_;
+#if 0
+  static unsigned int prev_cpu = 9999;
+  static char prev[1024];
+  if (cpuid() == prev_cpu && strcmp_(fmt, prev) == 0) {
+    // \x1b[32m
+    // \x1b[34m
+    consputc('\x1b'); consputc('['); consputc('3');
+    if (cpuid() == 0)
+      consputc('2');
+    else
+      consputc('4');
+    consputc('m');
+    consputc('^');
+    // \x1b[0m
+    consputc('\x1b'); consputc('['); consputc('0'); consputc('m');
+    if(locking)
+      release(&cons.lock);
+    return;
+  }
+  prev_cpu = cpuid();
+  strcpy_(prev, fmt);
+#endif /* 0 */
 
   if (fmt == 0)
     panic("null fmt");
@@ -75,8 +130,18 @@ cprintf(char *fmt, ...)
     if(c == 0)
       break;
     switch(c){
+    case '0':
+      for (const char *s = cpuid_s(); *s != '\0'; s++)
+        consputc(*s);
+      break;
     case 'd':
       printint(*argp++, 10, 1);
+      break;
+    case 'u':
+      {
+        uint u = *argp++;
+        printint((int)u, 10, 1);
+      }
       break;
     case 'x':
     case 'p':

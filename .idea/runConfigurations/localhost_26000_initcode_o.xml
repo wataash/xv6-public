@@ -1,0 +1,5 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="localhost 26000 initcode.o" type="CLion_Remote" remoteCommand="localhost:26000" symbolFile="$PROJECT_DIR$/initcode.o" sysroot="">
+    <method v="2" />
+  </configuration>
+</component>

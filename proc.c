@@ -18,7 +18,11 @@ int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
+#if 0
 static void wakeup1(void *chan);
+#else /* 0 */
+static void wakeup1(const void *chan);
+#endif /* 0 */
 
 void
 pinit(void)
@@ -65,6 +69,8 @@ myproc(void) {
   return p;
 }
 
+// TODO
+// TODO: memdump
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -73,14 +79,20 @@ myproc(void) {
 static struct proc*
 allocproc(void)
 {
+  log_debug("");
   struct proc *p;
   char *sp;
 
   acquire(&ptable.lock);
 
+  // ptable is global variable so filled with zero
+  // always the first p is p->state == UNUSED
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
       goto found;
+
+  log_warn("NOTREACHED");
 
   release(&ptable.lock);
   return 0;
@@ -112,6 +124,12 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // ptable.proc[0].kstack = 0x8dff_f000 kalloc()ed
+  //                         0x8dff_ff9c --v 20B struct context; eip=forkret <- ptable.proc[0].context
+  //                         0x8dff_ffb0 --v 4B  -> trapret
+  //                         0x8dff_ffb4 --v 76B struct trapframe            <- ptable.proc[0].tf
+  //          +KSTACKSIZE == 0x8e00_0000
+
   return p;
 }
 
@@ -120,6 +138,7 @@ found:
 void
 userinit(void)
 {
+  log_debug("");
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
@@ -128,8 +147,12 @@ userinit(void)
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
+  // initcode.S っぽい
+  // _binary_initcode_start _binary_initcode_size をgrepしても見つからない…
+  // gasか何かの暗黙のシンボルルールか？
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
+  // TODO
   memset(p->tf, 0, sizeof(*p->tf));
   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
@@ -141,6 +164,9 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+
+  // ptable.proc[0].cwd == icache.inode[0] (/ dev:1 inum:1 ref:1)
+  // この後 exec("/init") で ref:2 になる
 
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above
@@ -322,6 +348,7 @@ wait(void)
 void
 scheduler(void)
 {
+  log_info("loop");
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
@@ -330,16 +357,22 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
+    // vectors.S vector32: -> trap.c trap() IRQ_TIMER
+
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
 
+      // needs lapicw(TICR, 2147483647) otherwise too many logs
+      log_debug("found RUNNABLE: pid:%d", p->pid);
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       c->proc = p;
+      // TODO
       switchuvm(p);
       p->state = RUNNING;
 
@@ -401,6 +434,7 @@ forkret(void)
   release(&ptable.lock);
 
   if (first) {
+    log_info("first");
     // Some initialization functions must be run in the context
     // of a regular process (e.g., they call sleep), and thus cannot
     // be run from main().
@@ -455,7 +489,11 @@ sleep(void *chan, struct spinlock *lk)
 // Wake up all processes sleeping on chan.
 // The ptable lock must be held.
 static void
+#if 0
 wakeup1(void *chan)
+#else /* 0 */
+wakeup1(const void *chan)
+#endif /* 0 */
 {
   struct proc *p;
 
@@ -466,7 +504,11 @@ wakeup1(void *chan)
 
 // Wake up all processes sleeping on chan.
 void
+#if 0
 wakeup(void *chan)
+#else /* 0 */
+wakeup(const void *chan)
+#endif /* 0 */
 {
   acquire(&ptable.lock);
   wakeup1(chan);

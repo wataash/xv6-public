@@ -12,6 +12,10 @@ pde_t *kpgdir;  // for use in scheduler()
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
+#ifndef __clang__
+// __attribute__((optimize("O0"))) // won't boot
+__attribute__((optimize("Og")))
+#endif
 void
 seginit(void)
 {
@@ -21,7 +25,13 @@ seginit(void)
   // Cannot share a CODE descriptor for both kernel and user
   // because it would have to have DPL_USR, but the CPU forbids
   // an interrupt from CPL=0 to DPL=3.
+
+  // readeflags():
+  //   eflags: 0x86 [ IOPL=0 SF PF ]
+  //     FL_IF (0x200) not set
   c = &cpus[cpuid()];
+
+  // TODO: PTE_W PTE_U は STA_W DPL_USER と役割被ってないの？
   c->gdt[SEG_KCODE] = SEG(STA_X|STA_R, 0, 0xffffffff, 0);
   c->gdt[SEG_KDATA] = SEG(STA_W, 0, 0xffffffff, 0);
   c->gdt[SEG_UCODE] = SEG(STA_X|STA_R, 0, 0xffffffff, DPL_USER);
@@ -32,23 +42,67 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
+#ifndef __clang__
+// __attribute__((optimize("O0"))) // won't boot
+// __attribute__((optimize("Og")))
+#endif
 static pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
   pte_t *pgtab;
 
+  if ((uint)va == KERNBASE) { // kmap[0].virt 0x8000_0000 PDX:512 PTX:0
+    (void)sizeof(pde_t);
+    (void)PDX(va);         // 512
+    (void)PDX(0xffffffff); // 1023
+    (void)kalloc;          // allocated char pgdir[PGSIZE], pde_t pgdir [1024]
+    (void)pgdir;           // 0x803f_f000
+    (void)&pgdir[0];       // 0x803f_f000 -> 0
+    (void)&pgdir[1];       // 0x803f_f004 -> 0
+    (void)&pgdir[PDX(va)]; // 0x803f_f800 -> 0  pde
+    (void)&pgdir[1023];    // 0x803f_fffc -> 0
+    (void)&pgdir[1024];    // 0x8040_0000 (invalid)
+
+    // pgtab = kalloc() -> 0x803f_e000 pte_t [1024] zero'ed
+    // pgdir[PDX(va)] = V2P(pgtab) | PTE_P | PTE_W | PTE_U == 0x3f_e007
+    // returns (pte_t *) &pgtab[PTX(va)] == &pgtab[0] == 0x803f_e000
+
+    breakpoint();
+  } else if ((uint)va == KERNLINK) { // kmap[1].virt
+    breakpoint();
+  } else if ((uint)va == (uint)data) { // kmap[2].virt
+    breakpoint();
+  } else if ((uint)va == DEVSPACE) { // kmap[3].virt
+    breakpoint();
+  } else {
+    breakpoint();
+  }
+
   pde = &pgdir[PDX(va)];
   if(*pde & PTE_P){
     pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
   } else {
+#if 0
     if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
       return 0;
+#else /* 0 */
+    if (alloc == 0) {
+      return 0;
+    } else {
+      if ((pgtab = (pte_t *)kalloc()) == 0) {
+        notreached();
+        return 0;
+      }
+    }
+#endif /* 0 */
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
     // be further restricted by the permissions in the page table
     // entries, if necessary.
+    (void)(void *) V2P(pgtab);                  // 0x3f_e000
+    (void)(V2P(pgtab) | PTE_P | PTE_W | PTE_U); // 0x3f_e007
     *pde = V2P(pgtab) | PTE_P | PTE_W | PTE_U;
   }
   return &pgtab[PTX(va)];
@@ -57,14 +111,59 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
 // be page-aligned.
+#if 0
 static int
 mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
+#else /* 0 */
+// __attribute__((optimize("O0"))) // won't boot
+static int
+mappages(pde_t *pgdir, const void *const va, uint size, uint pa, int perm)
+#endif /* 0 */
 {
   char *a, *last;
   pte_t *pte;
 
   a = (char*)PGROUNDDOWN((uint)va);
   last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
+
+  pte = 0;
+  if (a != va)
+    notreached(); // `a` always aligned
+  // if (a == kmap[0].virt)
+  if ((uint)a == KERNBASE) {                 // kmap[0].virt
+    breakpoint1((void *)last); // Og: optimized out   0x800f_f000
+    (void)((0x80000000 + 0x100000 - 1) == 0x800fffff);
+    (void)(PGROUNDDOWN(0x800fffff) == 0x800ff000);
+
+    (void)(PDX(va) == 512);
+    // finally:
+    (void)(pgdir[PDX(va)] == (0x3fe000 | PTE_P | PTE_W | PTE_U));
+    (void)((0x3fe000 | PTE_P | PTE_W | PTE_U) == 0x3fe007);
+    (void)((uint)P2V(0x3fe000) == 0x803fe000); // allocated pte
+    (void)0x803fe000;                          // pte_t [1024]
+    (void)(((pte_t *)0x803fe000)[0] == 0x0003); // PTE_P | PTE_W(kmap[0].perm)
+    (void)(((pte_t *)0x803fe000)[1] == 0x1003);
+    (void)(((pte_t *)0x803fe000)[15] == 0xf003);
+    (void)(((pte_t *)0x803fe000)[16] == 0x010003);
+    (void)(((pte_t *)0x803fe000)[255] == 0xff0003);
+    (void)(((pte_t *)0x803fe000)[256] == 0);  // NULL
+    (void)(((pte_t *)0x803fe000)[1023] == 0); // NULL
+    (void)((pte_t *)0x803fe000 + 1024 == (pte_t *)0x803ff000); // next page
+
+    breakpoint();
+  } else if ((uint)a == KERNLINK) { // kmap[1].virt
+    // 0x803ff000
+    // finally:
+    (void)(pte == (pte_t *)0x803fe400);  // allocated
+    breakpoint();
+  } else if ((uint)a == (uint)data) { // kmap[2].virt
+    breakpoint();
+  } else if ((uint)a == DEVSPACE) { // kmap[3].virt
+    breakpoint();
+  } else {
+    breakpoint();
+  }
+
   for(;;){
     if((pte = walkpgdir(pgdir, a, 1)) == 0)
       return -1;
@@ -102,11 +201,19 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 
 // This table defines the kernel's mappings, which are present in
 // every process's page table.
+#if 0
 static struct kmap {
   void *virt;
   uint phys_start;
   uint phys_end;
   int perm;
+#else /* 0 */
+static const struct kmap {
+  const void *const virt;
+  const uint phys_start;
+  const uint phys_end;
+  const int perm;
+#endif /* 0 */
 } kmap[] = {
  { (void*)KERNBASE, 0,             EXTMEM,    PTE_W}, // I/O space
  { (void*)KERNLINK, V2P(KERNLINK), V2P(data), 0},     // kern text+rodata
@@ -118,8 +225,14 @@ static struct kmap {
 pde_t*
 setupkvm(void)
 {
+  // 4096 byte; 4096/sizeof(pde_t): 1024; pgdir[1024]
+  // pgdir[PDX(va)]
   pde_t *pgdir;
+#if 0
   struct kmap *k;
+#else /* 0 */
+  const struct kmap *k;
+#endif /* 0 */
 
   if((pgdir = (pde_t*)kalloc()) == 0)
     return 0;
@@ -129,6 +242,7 @@ setupkvm(void)
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                 (uint)k->phys_start, k->perm) < 0) {
+      notreached();
       freevm(pgdir);
       return 0;
     }
@@ -149,9 +263,14 @@ kvmalloc(void)
 void
 switchkvm(void)
 {
+  // (gdb) x/1xb 0
+  // 0x0:	0x53
   lcr3(V2P(kpgdir));   // switch to the kernel page table
+  // (gdb) x/1xb 0
+  // 0x0:	Cannot access memory at address 0x0
 }
 
+// TODO
 // Switch TSS and h/w page table to correspond to process p.
 void
 switchuvm(struct proc *p)
@@ -182,6 +301,7 @@ switchuvm(struct proc *p)
 void
 inituvm(pde_t *pgdir, char *init, uint sz)
 {
+  log_info("");
   char *mem;
 
   if(sz >= PGSIZE)
@@ -197,6 +317,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
 int
 loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 {
+  log_info("");
   uint i, pa, n;
   pte_t *pte;
 

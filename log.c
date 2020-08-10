@@ -53,6 +53,7 @@ static void commit();
 void
 initlog(int dev)
 {
+  log_info("dev:%d (must ==1 ROOTDEV)", dev);
   if (sizeof(struct logheader) >= BSIZE)
     panic("initlog: too big logheader");
 
@@ -62,6 +63,7 @@ initlog(int dev)
   log.start = sb.logstart;
   log.size = sb.nlog;
   log.dev = dev;
+  log_debug("log. start:%d size:%d dev:%d", log.start, log.size, log.dev);
   recover_from_log();
 }
 
@@ -69,6 +71,9 @@ initlog(int dev)
 static void
 install_trans(void)
 {
+  if (log.lh.n > 0)
+    log_warn("log.dev:%d log.lh.n:%d", log.dev, log.lh.n);
+
   int tail;
 
   for (tail = 0; tail < log.lh.n; tail++) {
@@ -85,6 +90,7 @@ install_trans(void)
 static void
 read_head(void)
 {
+  log_info("");
   struct buf *buf = bread(log.dev, log.start);
   struct logheader *lh = (struct logheader *) (buf->data);
   int i;
@@ -101,6 +107,7 @@ read_head(void)
 static void
 write_head(void)
 {
+  log_info("");
   struct buf *buf = bread(log.dev, log.start);
   struct logheader *hb = (struct logheader *) (buf->data);
   int i;
@@ -115,6 +122,7 @@ write_head(void)
 static void
 recover_from_log(void)
 {
+  log_info("");
   read_head();
   install_trans(); // if committed, copy from log to disk
   log.lh.n = 0;

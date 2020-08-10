@@ -70,6 +70,48 @@ struct segdesc {
 // +----------------+----------------+---------------------+
 //  \--- PDX(va) --/ \--- PTX(va) --/
 
+//   0b1000...000 = 2^(number of zeroes)
+//            0b1 = 2^0 = 1
+//           0b10 = 2^1 = 2
+//          0b100 = 2^2 = 4
+//         0b1000 = 2^3 = 8
+// 0b10_0000_0000 = 2^9 = 512
+// 0b11_1111_1111       = 1023 (2^10-1)
+
+// PDX: 0-1023
+// PTX: 0-1023
+// offset: 0-4095
+
+// PDX  PTX  off  hex        bin
+//                DD?T TOOO  DDDD DDDD DDTT TTTT TTTT OOOO OOOO OOOO
+//   0    0    0  0000_0000  0000 0000 0000 0000 0000 0000 0000 0000
+//   0    1    0  0000_1000  0000 0000 0000 0000 0001 0000 0000 0000
+//   1    0    0  0040_0000  0000 0000 0100 0000 0000 0000 0000 0000
+//   1    1    0  0040_1000  0000 0000 0100 0000 0001 0000 0000 0000
+//
+//   0    0    0  0000_0000  0000 0000 0000 0000 0000 0000 0000 0000
+//   0    1    0  0010_0000  0000 0000 0001 0000 0000 0000 0000 0000
+//   0    2    0  0020_0000  0000 0000 0010 0000 0000 0000 0000 0000
+//   0    3    0  0030_0000  0000 0000 0011 0000 0000 0000 0000 0000
+//   1    0    0  0040_0000  0000 0000 0100 0000 0000 0000 0000 0000
+//   1    1    0  0050_0000  0000 0000 0101 0000 0000 0000 0000 0000
+//   1    2    0  0060_0000  0000 0000 0110 0000 0000 0000 0000 0000
+//   1    3    0  0070_0000  0000 0000 0111 0000 0000 0000 0000 0000
+//   2    0    0  0080_0000  0000 0000 1000 0000 0000 0000 0000 0000
+//   2    1    0  0090_0000  0000 0000 1001 0000 0000 0000 0000 0000
+//   2    2    0  00a0_0000  0000 0000 1010 0000 0000 0000 0000 0000
+//   2    3    0  00b0_0000  0000 0000 1011 0000 0000 0000 0000 0000
+//   3    0    0  00c0_0000  0000 0000 1100 0000 0000 0000 0000 0000
+//   3    1    0  00d0_0000  0000 0000 1101 0000 0000 0000 0000 0000
+//   3    2    0  00e0_0000  0000 0000 1110 0000 0000 0000 0000 0000
+//   3    3    0  00f0_0000  0000 0000 1111 0000 0000 0000 0000 0000
+
+// clion evaluate:
+// PDX(0b11111111110000000000000000000000)
+// PDX(0xfe000000)
+//
+// (gdb) p/t 0x80110000
+
 // page directory index
 #define PDX(va)         (((uint)(va) >> PDXSHIFT) & 0x3FF)
 
@@ -82,13 +124,38 @@ struct segdesc {
 // Page directory and page table constants.
 #define NPDENTRIES      1024    // # directory entries per page directory
 #define NPTENTRIES      1024    // # PTEs per page table
+// 4-6 4.2 HIERARCHICAL PAGING STRUCTURES: AN OVERVIEW
+// Every paging structure is 4096 Bytes ...
 #define PGSIZE          4096    // bytes mapped by a page
 
 #define PTXSHIFT        12      // offset of PTX in a linear address
 #define PDXSHIFT        22      // offset of PDX in a linear address
 
+// PGROUNDUP(4096) -> 4096
+// PGROUNDUP(4097) -> 8192
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
+// PGROUNDDOWN(4095) -> 0
+// PGROUNDDOWN(4096) -> 4096
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
+
+// pde_t *pde = pgdir[PDE(va) (0-1024)]:
+// 4B (32 bits)
+// +--------------------+------------+
+//  20                   12
+//  PTE_ADDR             PTE_FLAGS
+//  -> V2P(pgtab)        PTE_P | PTE_W | PTE_U
+//
+// pte_t *pgtab
+// 4B (32 bits)
+// +--------------------+------------+
+//  20                   12
+//  PTE_ADDR             PTE_FLAGS
+//  -> pa                perm | PTE_P
+//        pa | perm | PTE_P
+//
+// > The permissions here are overly generous, but they can
+// > be further restricted by the permissions in the page table
+// > entries, if necessary.
 
 // Page table/directory entry flags.
 #define PTE_P           0x001   // Present

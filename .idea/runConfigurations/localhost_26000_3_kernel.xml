@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="localhost 26000 3 kernel" type="CLion_Remote" version="1" remoteCommand="localhost:26000" symbolFile="$PROJECT_DIR$/kernel" sysroot="">
+    <debugger kind="GDB" isBundled="true" />
+    <method v="2" />
+  </configuration>
+</component>

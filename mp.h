@@ -27,6 +27,7 @@ struct mpconf {         // configuration table header
 };
 
 struct mpproc {         // processor table entry
+  // MPPROC
   uchar type;                   // entry type (0)
   uchar apicid;                 // local APIC id
   uchar version;                // local APIC verison
@@ -38,6 +39,7 @@ struct mpproc {         // processor table entry
 };
 
 struct mpioapic {       // I/O APIC table entry
+  // MPIOAPIC
   uchar type;                   // entry type (2)
   uchar apicno;                 // I/O APIC id
   uchar version;                // I/O APIC version

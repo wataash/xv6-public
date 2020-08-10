@@ -41,6 +41,7 @@ idewait(int checkerr)
   int r;
 
   while(((r = inb(0x1f7)) & (IDE_BSY|IDE_DRDY)) != IDE_DRDY)
+    asm("nop");
     ;
   if(checkerr && (r & (IDE_DF|IDE_ERR)) != 0)
     return -1;
@@ -53,6 +54,8 @@ ideinit(void)
   int i;
 
   initlock(&idelock, "ide");
+  // ncpu-1: the last cpu?
+  // 最終cpuに割り込ませる
   ioapicenable(IRQ_IDE, ncpu - 1);
   idewait(0);
 
@@ -73,6 +76,7 @@ ideinit(void)
 static void
 idestart(struct buf *b)
 {
+  log_debug("b:%p", b);
   if(b == 0)
     panic("idestart");
   if(b->blockno >= FSSIZE)
@@ -109,9 +113,16 @@ ideintr(void)
   acquire(&idelock);
 
   if((b = idequeue) == 0){
+    log_warn("idequeue == NULL");
     release(&idelock);
     return;
   }
+
+  log_debug("   b=idequeue:%p flags:%d dev:%u blockno:%u refcnt:%u prev:%p "
+            "next:%p qnext:%p data:%x%x%x",
+            b, b->flags, b->dev, b->blockno, b->refcnt, b->prev, b->next,
+            b->qnext, b->data[0], b->data[1], b->data[2]);
+
   idequeue = b->qnext;
 
   // Read data if needed.
@@ -121,9 +132,17 @@ ideintr(void)
   // Wake process waiting for this buf.
   b->flags |= B_VALID;
   b->flags &= ~B_DIRTY;
+
+  log_debug("           -> %p flags:%d dev:%u blockno:%u refcnt:%u prev:%p "
+            "next:%p qnext:%p data:%x%x%x",
+            b, b->flags, b->dev, b->blockno, b->refcnt, b->prev, b->next,
+            b->qnext, b->data[0], b->data[1], b->data[2]);
+
   wakeup(b);
 
   // Start disk on next buf in queue.
+  if(idequeue != 0)
+    log_warn("idestart(%p)", idequeue); // how reached?
   if(idequeue != 0)
     idestart(idequeue);
 
@@ -134,9 +153,21 @@ ideintr(void)
 // Sync buf with disk.
 // If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
 // Else if B_VALID is not set, read buf from disk, set B_VALID.
+//
+// 1st call: alltraps() forkret() iinit(ROOTDEV) readsb(ROOTDEV, &sb)
+//   bread(ROOTDEV, 1) iderw(bget(ROOTDEV, 1))
+// b->flags   0
+// b->dev     1 ROOTDEV
+// b->blockno 1
+// b->qnext   NULL
+//
+// b->qnext = NULL;
+// idequeue = b;
+// idestart(b)
 void
 iderw(struct buf *b)
 {
+  log_debug("");
   struct buf **pp;
 
   if(!holdingsleep(&b->lock))
@@ -151,15 +182,19 @@ iderw(struct buf *b)
   // Append b to idequeue.
   b->qnext = 0;
   for(pp=&idequeue; *pp; pp=&(*pp)->qnext)  //DOC:insert-queue
+    asm("nop");
     ;
   *pp = b;
 
   // Start disk if necessary.
   if(idequeue == b)
     idestart(b);
+  else
+    asm("nop");
 
   // Wait for request to finish.
   while((b->flags & (B_VALID|B_DIRTY)) != B_VALID){
+    log_debug("wait %p", b);
     sleep(b, &idelock);
   }
 

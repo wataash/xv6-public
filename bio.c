@@ -58,6 +58,8 @@ binit(void)
 // Look through buffer cache for block on device dev.
 // If not found, allocate a buffer.
 // In either case, return locked buffer.
+//
+// 1st call: alltraps() forkret() iinit(ROOTDEV) readsb(ROOTDEV, &sb) bread(ROOTDEV, 1)
 static struct buf*
 bget(uint dev, uint blockno)
 {
@@ -82,6 +84,9 @@ bget(uint dev, uint blockno)
     if(b->refcnt == 0 && (b->flags & B_DIRTY) == 0) {
       b->dev = dev;
       b->blockno = blockno;
+      // Note that the assignment to flags clears B_VALID, thus ensuring
+      // that bread will read the block data from disk rather than incorrectly using the buffer’s
+      // previous contents.
       b->flags = 0;
       b->refcnt = 1;
       release(&bcache.lock);

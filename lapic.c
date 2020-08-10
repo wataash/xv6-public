@@ -10,6 +10,43 @@
 #include "mmu.h"
 #include "x86.h"
 
+// https://ja.wikipedia.org/wiki/APIC
+//   IPI: Inter-Processor Interrupt
+//   EOI: End of Interrupt
+// https://ja.wikipedia.org/wiki/Intel_8259#スプリアス割り込み
+// https://www.valinux.co.jp/technologylibrary/document/linux/interrupts0001/ Linux / x86_64の割り込み処理 第1回 割り込みコントローラ
+//   > IDTのエントリ数は256個ですが、うち32が例外、224が割り込みに割り当てられています
+//   > ハンドラはいずれもRing 0 (カーネルモード) で実行されますので、(LDTやGDTによる特権レベル間コールと同様) 「ゲート」という仕組みが使われます
+//   > 「割り込みゲート」、「タスクゲート」、「トラップゲート」
+// https://www.valinux.co.jp/technologylibrary/document/linuxkernel/timer0003/ カーネルにおけるタイマー事情 ～第3回 IAマシンのもつ各種計時ハードウェア～
+// https://www.slideshare.net/mao999/4-linux-3 4章 Linuxカーネル - 割り込み・例外 3
+//   5. T_DIVIDE T_DEBUG T_NMI T_BRKPT T_OFLOW T_BOUND T_ILLOP T_DEVICE T_DBLFLT T_COPROC T_TSS T_SEGNP T_STACK T_GPFLT T_PGFLT T_RES T_FPERR T_ALIGN T_MCHK T_SIMDERR
+//   IPI: Inter-Processor Interrupt
+//   ICR: Interrupt Command Register
+//   TPR: Task Priority Register
+//   APR: Arbtration Priority Register
+//   15. LINT0とINTR ピンを接続
+//       LINT1とNMIピンを接続
+// https://k-onishi.hatenablog.jp/entry/2019/01/13/231700 Linux Kernel ~ 割り込みと例外　例外の種類と割り込みディスクリプタ ~
+//   TODO
+// http://caspar.hazymoon.jp/OpenBSD/annex/interrupt.html 割り込みと例外
+//   TODO
+// https://www.cs.princeton.edu/courses/archive/spring11/cos217/lectures/17ExceptionsAndProcesses.pdf
+//   TODO
+// https://www.slideshare.net/syuu1228/interrupts-on-xv6-14143405 Interrupts on xv6
+//   p.24 Local Vector Table
+// https://wiki.osdev.org/APIC
+//   Local APIC registers
+//     EOI Register
+//       0xB0
+//     Spurious Interrupt Vector Register
+//       The offset is 0xF0
+//     Interrupt Command Register
+//     Bits 8-10 INIT STARTUP
+//     Bits 12 DELIVS
+//     Bits 14 ASSERT
+//     Bits 15 LEVEL
+
 // Local APIC registers, divided by 4 for use as uint[] indices.
 #define ID      (0x0020/4)   // ID
 #define VER     (0x0030/4)   // Version
@@ -58,20 +95,27 @@ lapicinit(void)
     return;
 
   // Enable local APIC; set spurious interrupt vector.
+  // 8-20 8.4.4 MP Initialization Example
   lapicw(SVR, ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
+  // ?
   // The timer repeatedly counts down at bus frequency
   // from lapic[TICR] and then issues an interrupt.
   // If xv6 cared more about precise timekeeping,
   // TICR would be calibrated using an external time source.
   lapicw(TDCR, X1);
   lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
+  // (10_000_000 / bus-freq[Hz]) [s] ?
   lapicw(TICR, 10000000);
+  // lapicw(TICR, 100); // too many interrupt, very slow
+  lapicw(TICR, 2147483647); // make scheduler() loop slower
 
+  // ?
   // Disable logical interrupt lines.
   lapicw(LINT0, MASKED);
   lapicw(LINT1, MASKED);
 
+  // ?
   // Disable performance counter overflow interrupts
   // on machines that provide that interrupt entry.
   if(((lapic[VER]>>16) & 0xFF) >= 4)
@@ -80,6 +124,7 @@ lapicinit(void)
   // Map error interrupt to IRQ_ERROR.
   lapicw(ERROR, T_IRQ0 + IRQ_ERROR);
 
+  // ?
   // Clear error status register (requires back-to-back writes).
   lapicw(ESR, 0);
   lapicw(ESR, 0);
@@ -91,8 +136,12 @@ lapicinit(void)
   lapicw(ICRHI, 0);
   lapicw(ICRLO, BCAST | INIT | LEVEL);
   while(lapic[ICRLO] & DELIVS)
+  {
+    notreached();
+  }
     ;
 
+  // ?
   // Enable interrupts on the APIC (but not on the processor).
   lapicw(TPR, 0);
 }
@@ -157,6 +206,7 @@ lapicstartap(uchar apicid, uint addr)
     lapicw(ICRHI, apicid<<24);
     lapicw(ICRLO, STARTUP | (addr>>12));
     microdelay(200);
+    // breaks mpenter in another cpu; 多分頑張ればその前にentryother.Sでもブレークするはず
   }
 }
 

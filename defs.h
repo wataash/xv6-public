@@ -1,3 +1,22 @@
+static inline void
+notreached(void)
+{
+  asm("nop");
+}
+
+static inline void
+breakpoint(void)
+{
+  asm("nop");
+}
+
+static inline void
+breakpoint1(void *a1)
+{
+  asm("nop");
+  (void)a1;
+}
+
 struct buf;
 struct context;
 struct file;
@@ -21,6 +40,10 @@ void            consoleinit(void);
 void            cprintf(char*, ...);
 void            consoleintr(int(*)(void));
 void            panic(char*) __attribute__((noreturn));
+
+#define log_warn(fmt, ...) cprintf("%0\x1b[33m W %s " fmt "\x1b[0m\n", __func__, ##__VA_ARGS__)
+#define log_info(fmt, ...) cprintf("%0\x1b[34m I %s " fmt "\x1b[0m\n", __func__, ##__VA_ARGS__)
+#define log_debug(fmt, ...) cprintf("%0\x1b[37m D %s " fmt "\x1b[0m\n", __func__, ##__VA_ARGS__)
 
 // exec.c
 int             exec(char*, char**);
@@ -118,7 +141,11 @@ void            setproc(struct proc*);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
+#if 0
 void            wakeup(void*);
+#else /* 0 */
+void            wakeup(const void *);
+#endif /* 0 */
 void            yield(void);
 
 // swtch.S

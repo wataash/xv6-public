@@ -13,6 +13,7 @@
 void
 initsleeplock(struct sleeplock *lk, char *name)
 {
+  // log_debug("lk:%p name:%s", lk, name);
   initlock(&lk->lk, "sleep lock");
   lk->name = name;
   lk->locked = 0;
@@ -22,6 +23,7 @@ initsleeplock(struct sleeplock *lk, char *name)
 void
 acquiresleep(struct sleeplock *lk)
 {
+  // 3cpu目からはspinするんかいな
   acquire(&lk->lk);
   while (lk->locked) {
     sleep(lk, &lk->lk);

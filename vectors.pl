@@ -11,6 +11,33 @@ print ".globl alltraps\n";
 for(my $i = 0; $i < 256; $i++){
     print ".globl vector$i\n";
     print "vector$i:\n";
+    if ($i ==  0   ) { print "  // T_DIVIDE // divide error\n" }
+    if ($i ==  1   ) { print "  // T_DEBUG  // debug exception\n" }
+    if ($i ==  2   ) { print "  // T_NMI    // non-maskable interrupt\n" }
+    if ($i ==  3   ) { print "  // T_BRKPT  // breakpoint\n" }
+    if ($i ==  4   ) { print "  // T_OFLOW  // overflow\n" }
+    if ($i ==  5   ) { print "  // T_BOUND  // bounds check\n" }
+    if ($i ==  6   ) { print "  // T_ILLOP  // illegal opcode\n" }
+    if ($i ==  7   ) { print "  // T_DEVICE // device not available\n" }
+    if ($i ==  8   ) { print "  // T_DBLFLT // double fault\n" }
+    if ($i ==  9   ) { print "  // T_COPROC // reserved (not used since 486)\n" }
+    if ($i == 10   ) { print "  // T_TSS    // invalid task switch segment\n" }
+    if ($i == 11   ) { print "  // T_SEGNP  // segment not present\n" }
+    if ($i == 12   ) { print "  // T_STACK  // stack exception\n" }
+    if ($i == 13   ) { print "  // T_GPFLT  // general protection fault\n" }
+    if ($i == 14   ) { print "  // T_PGFLT  // page fault\n" }
+    if ($i == 15   ) { print "  // T_RES    // reserved\n" }
+    if ($i == 16   ) { print "  // T_FPERR  // floating point error\n" }
+    if ($i == 17   ) { print "  // T_ALIGN  // aligment check\n" }
+    if ($i == 18   ) { print "  // T_MCHK   // machine check\n" }
+    if ($i == 19   ) { print "  // T_SIMDERR// SIMD floating point error\n" }
+    if ($i == 32+0)  { print "  // T_IRQ0 + IRQ_TIMER\n" }
+    if ($i == 32+1)  { print "  // T_IRQ0 + IRQ_KBD\n" }
+    if ($i == 32+4)  { print "  // T_IRQ0 + IRQ_COM1\n" }
+    if ($i == 32+14) { print "  // T_IRQ0 + IRQ_IDE\n" }
+    if ($i == 32+19) { print "  // T_IRQ0 + IRQ_ERROR\n" }
+    if ($i == 32+31) { print "  // T_IRQ0 + IRQ_SPURIOUS\n" }
+    if ($i == 64)    { print "  // T_SYSCALL\n" }
     if(!($i == 8 || ($i >= 10 && $i <= 14) || $i == 17)){
         print "  pushl \$0\n";
     }

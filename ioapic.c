@@ -6,6 +6,7 @@
 #include "defs.h"
 #include "traps.h"
 
+// https://wiki.osdev.org/APIC
 #define IOAPIC  0xFEC00000   // Default physical address of IO APIC
 
 #define REG_ID     0x00  // Register index: ID
@@ -59,7 +60,9 @@ ioapicinit(void)
   // Mark all interrupts edge-triggered, active high, disabled,
   // and not routed to any CPUs.
   for(i = 0; i <= maxintr; i++){
+    // TODO: +2*i? +2*i+1?
     ioapicwrite(REG_TABLE+2*i, INT_DISABLED | (T_IRQ0 + i));
+    // 0 == 0 (cpu0) << 24
     ioapicwrite(REG_TABLE+2*i+1, 0);
   }
 }

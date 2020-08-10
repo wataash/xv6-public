@@ -20,6 +20,30 @@ tvinit(void)
   int i;
 
   for(i = 0; i < 256; i++)
+    // SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
+    {
+      idt[i].off_15_0 = (uint)(vectors[i]) & 0xffff; // off
+      idt[i].cs = SEG_KCODE << 3;
+      idt[i].args = 0;
+      idt[i].rsv1 = 0;
+      idt[i].type = 0xE; // istrap == 0; interrupt gate (clears FL_IF)
+      idt[i].s = 0;
+      idt[i].dpl = 0; // d
+      idt[i].p = 1;
+      idt[i].off_31_16 = (uint)(vectors[i]) >> 16; // off
+    }
+  // SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
+  idt[64].off_15_0 = (uint)(vectors[64]) & 0xffff; // off
+  idt[64].cs = SEG_KCODE << 3;
+  idt[64].args = 0;
+  idt[64].rsv1 = 0;
+  idt[64].type = 0xF; // istrap == 1; trap (= exception) gate (leaves FL_IF alone)
+  idt[64].s = 0;
+  idt[64].dpl = DPL_USER; // d
+  idt[64].p = 1;
+  idt[64].off_31_16 = (uint)(vectors[64]) >> 16; // off
+
+  for(i = 0; i < 256; i++)
     SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
   SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
 
@@ -54,6 +78,8 @@ trap(struct trapframe *tf)
       wakeup(&ticks);
       release(&tickslock);
     }
+    else
+      asm("nop"); // cpu1
     lapiceoi();
     break;
   case T_IRQ0 + IRQ_IDE:
